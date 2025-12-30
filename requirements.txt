@@ -1,0 +1,11 @@
+Django>=5.2,<6
+djangorestframework
+python-dotenv
+# MySQL drivers: choose one
+# mysqlclient is native C extension (recommended for production)
+mysqlclient
+# Alternatively for Windows development you can use PyMySQL (pure python)
+# PyMySQL
+
+# Optional helpers
+dj-database-url

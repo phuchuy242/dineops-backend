@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Environment variables files
+.env
+.env.local
+.env.*
+
+# Database
+*.sqlite3
+db.sqlite3
+
+# IDEs
+.vscode/
+.idea/
+
+# macOS
+.DS_Store
+
+# Distribution / packaging
+build/
+dist/
+.eggs/
+
+# Logs
+*.log
+
+# Docker
+docker-compose.override.yml
+
+# Misc
+coverage.xml
+htmlcov/
+.pylint.d/
+
+#idea
+.idea
+
