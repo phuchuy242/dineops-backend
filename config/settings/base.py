@@ -55,6 +55,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     # third-party
     'rest_framework',
+    'corsheaders',
 
     # Local apps
     'apps.users',
@@ -69,8 +70,10 @@ INSTALLED_APPS = [
     'apps.reports',
 ]
 
+
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -135,6 +138,24 @@ if not DATABASE_URL:
             }
         }
 
+# If the chosen database backend is MySQL, ensure utf8mb4 and sane defaults
+def _ensure_mysql_options(db_conf: dict):
+    options = db_conf.setdefault('OPTIONS', {}) or {}
+    # ensure proper charset for full unicode support (emoji)
+    options.setdefault('charset', 'utf8mb4')
+    # Set strict modes for safer SQL behavior
+    options.setdefault('init_command', "SET sql_mode='STRICT_TRANS_TABLES', innodb_strict_mode=1")
+    db_conf['OPTIONS'] = options
+    # connection pooling / reuse
+    try:
+        db_conf['CONN_MAX_AGE'] = int(os.getenv('CONN_MAX_AGE', '600'))
+    except Exception:
+        db_conf['CONN_MAX_AGE'] = 600
+
+
+# Apply MySQL-specific options if applicable (covers both dj_database_url and manual config)
+if 'default' in locals() and isinstance(DATABASES, dict):
+    engine = DATABASES.get('default', {}).get('ENGINE', '') or ''
 # PyMySQL shim registration (safe if PyMySQL is installed)
 try:
     if 'mysql' in (os.getenv('DB_ENGINE', '') or os.getenv('DATABASE_URL', '')):
@@ -151,6 +172,7 @@ AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
 ]
+AUTH_USER_MODEL = "users.User"
 
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
@@ -170,3 +192,4 @@ REST_FRAMEWORK = {
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20,
 }
+
