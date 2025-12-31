@@ -1,8 +1,10 @@
 from django.contrib import admin
 from django.urls import path, include
 
+from .health import health
+
 urlpatterns = [
-    path('dineops/', admin.site.urls),
+    path('admin/', admin.site.urls),
 
     # App APIs (versioned) - migrated from Backend/urls.py
     path('api/v1/users/', include('apps.users.urls')),
@@ -15,4 +17,8 @@ urlpatterns = [
     path('api/v1/inventory/', include('apps.inventory.urls')),
     path('api/v1/staff/', include('apps.staff.urls')),
     path('api/v1/reports/', include('apps.reports.urls')),
+
+
+    # alias for backwards-compat / convenience
+    path('api/health', health),
 ]
