@@ -9,3 +9,5 @@ mysqlclient
 
 # Optional helpers
 dj-database-url
+
+django-cors-headers
