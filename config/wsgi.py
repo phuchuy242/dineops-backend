@@ -1,8 +1,7 @@
 import os
 from django.core.wsgi import get_wsgi_application
 
-# default to the existing settings module to avoid breaking the current project
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'dineops-backend.settings')
+# Use config.settings.prod as the default WSGI settings module
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings.prod')
 
 application = get_wsgi_application()
-
