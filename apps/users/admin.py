@@ -1,29 +1,20 @@
+from Tools.scripts.pindent import delete_filter
 from django.contrib import admin
-from django.contrib.auth.admin import UserAdmin
 from .models import User
 
 
 @admin.register(User)
-class CustomUserAdmin(UserAdmin):
-    model = User
-
-    list_display = ("id", "email", "is_staff", "is_active")
-    list_filter = ("is_staff", "is_active")
-
-    ordering = ("email",)
-    search_fields = ("email",)
-
-    fieldsets = (
-        (None, {"fields": ("email", "password")}),
-        ("Permissions", {"fields": ("is_staff", "is_active", "is_superuser", "groups", "user_permissions")}),
-        ("Important dates", {"fields": ("last_login",)}),
+class CustomUserAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "uuid",
+        "email",
+        "user_name",
+        "is_active",
+        "is_verified",
+        "is_staff",
+        "created_at",
     )
-
-    add_fieldsets = (
-        (None, {
-            "classes": ("wide",),
-            "fields": ("email", "password1", "password2", "is_staff", "is_active"),
-        }),
-    )
-
-    filter_horizontal = ("groups", "user_permissions")
+    search_fields = ("email", "user_name")
+    list_filter = ("is_active", "is_verified", "is_staff")
+    ordering = ("-created_at",)
