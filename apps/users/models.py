@@ -38,7 +38,7 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     first_name = models.CharField(max_length=50)
     last_name = models.CharField(max_length=150)
-    phone_number = models.CharField(max_length=20, blank=True)
+    phone_number = models.CharField(max_length=20, null=True, unique=True)
 
     avatar_url = models.URLField(blank=True)
 

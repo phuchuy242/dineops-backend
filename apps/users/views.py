@@ -3,7 +3,8 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.permissions import AllowAny
 
-from .serializers import RegisterSerializer
+from .serializers import RegisterSerializer, LoginSerializer
+from .jwt_utils import generate_jwt_token
 
 
 @api_view(["POST"])
@@ -42,4 +43,42 @@ def register(request):
             },
         },
         status=status.HTTP_201_CREATED,
+    )
+
+
+@api_view(["POST"])
+def login(request):
+    serializer = LoginSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        # Return error message for incorrect username/password
+        return Response(
+            {
+                "status": 0,
+                "code": 400,
+                "msg": "Username or password is incorrect",
+            },
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Get authenticated user
+    user = serializer.validated_data["user"]
+
+    # Generate JWT token
+    token = generate_jwt_token(user)
+
+    # Update last login time
+    from django.utils import timezone
+
+    user.last_login_at = timezone.now()
+    user.save(update_fields=["last_login_at"])
+
+    return Response(
+        {
+            "status": 1,
+            "code": 200,
+            "msg": "login.successful",
+            "Authorization": f"Bearer {token}",
+        },
+        status=status.HTTP_200_OK,
     )
