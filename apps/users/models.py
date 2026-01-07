@@ -67,3 +67,38 @@ class User(AbstractBaseUser, PermissionsMixin):
     @property
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
+
+
+# New model: RefreshToken for stateful refresh token handling
+import uuid as _uuid
+from django.utils import timezone as _timezone
+from datetime import timedelta as _timedelta
+
+class RefreshToken(models.Model):
+    """Store refresh tokens (hashed) to support revoke/rotation per device.
+
+    Fields:
+      - jti: UUID in the refresh token payload, unique index
+      - user: FK to User
+      - token_hash: sha256 hash of the refresh token string
+      - created_at, expires_at, revoked, last_used_at
+    """
+    jti = models.UUIDField(default=_uuid.uuid4, editable=False, unique=True, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='refresh_tokens')
+    token_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked = models.BooleanField(default=False)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'user_refresh_tokens'
+        indexes = [models.Index(fields=['jti']), models.Index(fields=['token_hash'])]
+
+    def revoke(self):
+        self.revoked = True
+        self.save(update_fields=['revoked'])
+
+    def mark_used(self):
+        self.last_used_at = _timezone.now()
+        self.save(update_fields=['last_used_at'])

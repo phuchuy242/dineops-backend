@@ -1,36 +1,82 @@
 import jwt
 import hashlib
+import uuid
 from datetime import datetime, timedelta, timezone
 from django.conf import settings
 
 
-def generate_jwt_token(user):
-    """
-    Generate JWT token for authenticated user
-    """
-    # Get secret key from settings or use a default (should be in settings)
+def _get_secret_and_algo():
     secret_key = getattr(settings, 'JWT_SECRET_KEY', settings.SECRET_KEY)
+    algorithm = getattr(settings, 'JWT_ALGORITHM', 'HS256')
+    return secret_key, algorithm
 
-    # Create environment signature (simplified version)
+
+def _env_sig(user):
     env_data = f"{user.uuid}{user.user_name}{user.is_active}"
-    env_sig = hashlib.sha256(env_data.encode()).hexdigest()
+    return hashlib.sha256(env_data.encode()).hexdigest()
 
-    # Set token expiration (8 hours from now)
-    iat = datetime.now(timezone.utc)
-    exp = iat + timedelta(hours=8)
 
-    # Create payload
+def hash_token(token: str) -> str:
+    """Hash a token string for safe storage/comparison."""
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
+def generate_access_token(user):
+    """Generate access token (short lived)."""
+    secret_key, algorithm = _get_secret_and_algo()
+    now = datetime.now(timezone.utc)
+    access_minutes = getattr(settings, 'JWT_ACCESS_EXP_MINUTES', 15)
+    exp = now + timedelta(minutes=access_minutes)
+
     payload = {
         'uuid': str(user.uuid),
         'user_name': user.user_name,
         'active': user.is_active,
-        'iat': int(iat.timestamp()),
+        'iat': int(now.timestamp()),
         'exp': int(exp.timestamp()),
-        'env_sig': env_sig,
-        'roles': []  # Add roles here if you have role system
+        'env_sig': _env_sig(user),
+        'roles': [],
+        'token_type': 'access',
     }
 
-    # Generate token
-    token = jwt.encode(payload, secret_key, algorithm='HS256')
-
+    token = jwt.encode(payload, secret_key, algorithm=algorithm)
+    if isinstance(token, bytes):
+        token = token.decode()
     return token
+
+
+def generate_refresh_token(user, jti=None):
+    """Generate refresh token (long lived) and return tuple (token, jti, expires_at).
+
+    jti: optional UUID string to use as token id; if None, a new uuid4 is created.
+    """
+    secret_key, algorithm = _get_secret_and_algo()
+    now = datetime.now(timezone.utc)
+    refresh_days = getattr(settings, 'JWT_REFRESH_EXP_DAYS', 7)
+    exp = now + timedelta(days=refresh_days)
+
+    if jti is None:
+        jti = str(uuid.uuid4())
+
+    payload = {
+        'uuid': str(user.uuid),
+        'token_type': 'refresh',
+        'jti': str(jti),
+        'iat': int(now.timestamp()),
+        'exp': int(exp.timestamp()),
+        'env_sig': _env_sig(user),
+    }
+
+    token = jwt.encode(payload, secret_key, algorithm=algorithm)
+    if isinstance(token, bytes):
+        token = token.decode()
+
+    return token, str(jti), exp
+
+
+def decode_jwt(token: str) -> dict:
+    """Decode JWT and return payload, raising jwt exceptions on failure."""
+    secret_key, algorithm = _get_secret_and_algo()
+    # This will raise jwt.ExpiredSignatureError or jwt.InvalidTokenError which caller should handle
+    payload = jwt.decode(token, secret_key, algorithms=[algorithm])
+    return payload
