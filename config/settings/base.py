@@ -68,6 +68,10 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.staff',
     'apps.reports',
+    'apps.category',
+    'apps.products',
+    'apps.ingredient',
+    'apps.dishingredient',
 ]
 
 
@@ -193,3 +197,7 @@ REST_FRAMEWORK = {
     'PAGE_SIZE': 20,
 }
 
+# JWT Settings
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+JWT_ALGORITHM = 'HS256'
+JWT_EXPIRATION_HOURS = 8
