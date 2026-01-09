@@ -6,7 +6,7 @@ from .health import health
 urlpatterns = [
     path('admin/', admin.site.urls),
 
-    # App APIs (versioned) - migrated from Backend/urls.py
+#root api
     path('api/v1/users/', include('apps.users.urls')),
     path('api/v1/restaurants/', include('apps.restaurants.urls')),
     path('api/v1/tables/', include('apps.tables.urls')),
@@ -17,8 +17,12 @@ urlpatterns = [
     path('api/v1/inventory/', include('apps.inventory.urls')),
     path('api/v1/staff/', include('apps.staff.urls')),
     path('api/v1/reports/', include('apps.reports.urls')),
+    path('api/v1/products', include('apps.products.urls')),
+    path('api/v1/category', include('apps.category.urls')),
+    path('api/v1/ingredient', include('apps.ingredient.urls')),
+    path('api/v1/dishingredient',include('apps.dishingredient.urls')),
 
 
-    # alias for backwards-compat / convenience
+# Health check
     path('api/health', health),
 ]

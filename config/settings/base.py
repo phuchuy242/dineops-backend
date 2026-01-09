@@ -70,6 +70,8 @@ INSTALLED_APPS = [
     'apps.reports',
     'apps.category',
     'apps.products',
+    'apps.ingredient',
+    'apps.dishingredient',
 ]
 
 
