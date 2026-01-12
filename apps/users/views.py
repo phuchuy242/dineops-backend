@@ -2,8 +2,8 @@ from rest_framework import status
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import AllowAny
 from rest_framework_simplejwt.tokens import AccessToken
-from django.contrib.auth import authenticate
 from core.responses import success_response, error_response
+from .serializers import LoginSerializer
 from .models import User
 
 
@@ -67,62 +67,19 @@ def register(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-    """
-    Login endpoint that returns only access token (no refresh token)
+    """Login using LoginSerializer to enforce lockout and username/email handling."""
+    serializer = LoginSerializer(data=request.data)
+    serializer.is_valid(raise_exception=True)
+    user = serializer.validated_data['user']
 
-    Request body:
-    {
-        "email": "user@example.com",
-        "password": "password123"
-    }
-
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "Login successful",
-        "data": {
-            "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "token_type": "Bearer",
-            "user": {
-                "id": 1,
-                "email": "user@example.com"
-            }
-        }
-    }
-    """
-    email = request.data.get('email')
-    password = request.data.get('password')
-
-    if not email or not password:
-        return error_response(
-            msg='Email and password are required',
-            code=status.HTTP_400_BAD_REQUEST
-        )
-
-    user = authenticate(request, username=email, password=password)
-
-    if user is None:
-        return error_response(
-            msg='Invalid email or password',
-            code=status.HTTP_401_UNAUTHORIZED
-        )
-
-    if not user.is_active:
-        return error_response(
-            msg='Account is inactive',
-            code=status.HTTP_403_FORBIDDEN
-        )
-
-    # Generate only access token
     access_token = AccessToken.for_user(user)
-
     data = {
         'access_token': str(access_token),
         'token_type': 'Bearer',
         'user': {
             'id': user.id,
             'email': user.email,
+            'user_name': user.user_name,
             'is_staff': user.is_staff,
         }
     }
@@ -184,4 +141,3 @@ def profile(request):
         msg='Profile retrieved successfully',
         code=status.HTTP_200_OK
     )
-

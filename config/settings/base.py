@@ -44,6 +44,14 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-ez6gwzo(_$b*sfsu^&v2la_2$-
 DEBUG = _bool_env(os.getenv('DEBUG'), True)
 ALLOWED_HOSTS = _list_env(os.getenv('ALLOWED_HOSTS'), ['127.0.0.1', 'localhost'])
 
+# SSL/HTTPS Security (configure based on DEBUG status)
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year in production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -68,8 +76,6 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.staff',
     'apps.reports',
-    'apps.category',
-    'apps.products',
     'apps.ingredient',
     'apps.dishingredient',
 ]
@@ -187,16 +193,32 @@ STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'DEFAULT_PAGINATION_CLASS': 'core.responses.StandardResultsSetPagination',
     'PAGE_SIZE': 10,
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
+    'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
 }
+
+# CORS/CSRF
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = _list_env(os.getenv('CORS_ALLOWED_ORIGINS'), [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+])
+CORS_ALLOWED_ORIGIN_REGEXES = _list_env(os.getenv('CORS_ALLOWED_ORIGIN_REGEXES'))
+CSRF_TRUSTED_ORIGINS = _list_env(os.getenv('CSRF_TRUSTED_ORIGINS'), [
+    'http://localhost',
+    'http://localhost:3000',
+    'http://127.0.0.1',
+    'http://127.0.0.1:3000',
+])
+
 
 # JWT Settings
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
@@ -233,4 +255,3 @@ SIMPLE_JWT = {
 
     'JTI_CLAIM': 'jti',
 }
-

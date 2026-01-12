@@ -1,8 +1,15 @@
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 
-# urls.py for apps.tables
-from django.urls import path
-
-urlpatterns = [
-    # Add app-specific URL patterns here when you create views
-]
+# Import views if they exist
+try:
+    from .views import DishIngredientViewSet
+    router = DefaultRouter()
+    router.register(r'', DishIngredientViewSet, basename='dishingredient')
+    urlpatterns = [
+        path('', include(router.urls)),
+    ]
+except ImportError:
+    # No viewset defined yet
+    urlpatterns = []
 
