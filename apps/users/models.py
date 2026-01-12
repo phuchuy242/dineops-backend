@@ -1,5 +1,10 @@
-from django.contrib.auth.models import AbstractBaseUser, PermissionsMixin, BaseUserManager
+import uuid
 from django.db import models
+from django.contrib.auth.models import (
+    AbstractBaseUser,
+    PermissionsMixin,
+    BaseUserManager,
+)
 
 
 class UserManager(BaseUserManager):
@@ -22,15 +27,78 @@ class UserManager(BaseUserManager):
 
 
 class User(AbstractBaseUser, PermissionsMixin):
+    uuid = models.UUIDField(
+        default=uuid.uuid4,
+        editable=False,
+        unique=True,
+        db_index=True
+    )
+    user_name = models.CharField(max_length=150, unique=True)
     email = models.EmailField(unique=True)
+
+    first_name = models.CharField(max_length=50)
+    last_name = models.CharField(max_length=150)
+    phone_number = models.CharField(max_length=20, null=True, unique=True)
+
+    avatar_url = models.URLField(blank=True)
+
     is_active = models.BooleanField(default=True)
+    is_verified = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
+
+    last_login_at = models.DateTimeField(null=True, blank=True)
+    locked_until = models.DateTimeField(null=True, blank=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     objects = UserManager()
 
     USERNAME_FIELD = "email"
-    REQUIRED_FIELDS = []
+    REQUIRED_FIELDS = ["user_name", "first_name", "last_name"]
+
+    class Meta:
+        db_table = "users"
 
     def __str__(self):
         return self.email
+
+    @property
+    def full_name(self):
+        return f"{self.first_name} {self.last_name}"
+
+
+# New model: RefreshToken for stateful refresh token handling
+import uuid as _uuid
+from django.utils import timezone as _timezone
+from datetime import timedelta as _timedelta
+
+class RefreshToken(models.Model):
+    """Store refresh tokens (hashed) to support revoke/rotation per device.
+
+    Fields:
+      - jti: UUID in the refresh token payload, unique index
+      - user: FK to User
+      - token_hash: sha256 hash of the refresh token string
+      - created_at, expires_at, revoked, last_used_at
+    """
+    jti = models.UUIDField(default=_uuid.uuid4, editable=False, unique=True, db_index=True)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='refresh_tokens')
+    token_hash = models.CharField(max_length=128)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    revoked = models.BooleanField(default=False)
+    last_used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'user_refresh_tokens'
+        indexes = [models.Index(fields=['jti']), models.Index(fields=['token_hash'])]
+
+    def revoke(self):
+        self.revoked = True
+        self.save(update_fields=['revoked'])
+
+    def mark_used(self):
+        self.last_used_at = _timezone.now()
+        self.save(update_fields=['last_used_at'])

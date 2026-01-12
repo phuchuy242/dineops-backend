@@ -30,7 +30,8 @@ else:
         pass
 
 # Keep local-specific overrides here
-AUTH_USER_MODEL = globals().get('AUTH_USER_MODEL', 'core.User')
+# Ensure AUTH_USER_MODEL remains consistent with base settings
+AUTH_USER_MODEL = globals().get('AUTH_USER_MODEL', 'users.User')
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

@@ -1,6 +1,8 @@
 Django>=5.2,<6
 djangorestframework
+djangorestframework-simplejwt
 python-dotenv
+PyJWT
 # MySQL drivers: choose one
 # mysqlclient is native C extension (recommended for production)
 mysqlclient
