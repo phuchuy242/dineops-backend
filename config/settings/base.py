@@ -196,7 +196,44 @@ USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = _bool_env(os.getenv('CORS_ALLOW_ALL_ORIGINS'), DEBUG)
+CORS_ALLOWED_ORIGINS = _list_env(
+    os.getenv('CORS_ALLOWED_ORIGINS'),
+    ['http://localhost:3000', 'http://127.0.0.1:3000']
+)
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# CSRF Configuration
+CSRF_TRUSTED_ORIGINS = _list_env(
+    os.getenv('CSRF_TRUSTED_ORIGINS'),
+    ['http://localhost:3000', 'http://127.0.0.1:3000']
+)
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (

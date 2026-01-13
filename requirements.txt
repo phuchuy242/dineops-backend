@@ -13,3 +13,8 @@ mysqlclient
 dj-database-url
 
 django-cors-headers
+
+# Production server
+gunicorn
+requests
+
