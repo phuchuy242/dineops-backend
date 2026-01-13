@@ -114,32 +114,37 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
+# Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')
+
+# Initialize DATABASES dict immediately with a safe default
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': str(BASE_DIR / 'db.sqlite3'),
+    }
+}
+
+# Try to use DATABASE_URL if provided
 if DATABASE_URL:
     try:
-        import dj_database_url  # optional
-
+        import dj_database_url
         DATABASES = {
             'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600),
         }
-    except Exception:
-        DATABASE_URL = None
+    except Exception as e:
+        print(f"Warning: Failed to parse DATABASE_URL: {e}. Using SQLite3 instead.")
+        pass
+else:
+    # Use explicit DB_ENGINE setting if provided
+    DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3').strip()
 
-if not DATABASE_URL:
-    DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3')
-    if DB_ENGINE == 'django.db.backends.sqlite3':
+    if DB_ENGINE and DB_ENGINE != 'django.db.backends.sqlite3':
+        # MySQL or other database backend
         DATABASES = {
             'default': {
                 'ENGINE': DB_ENGINE,
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': DB_ENGINE,
-                'NAME': os.getenv('DB_NAME', 'menu_order_local'),
+                'NAME': os.getenv('DB_NAME', 'dineops_db'),
                 'USER': os.getenv('DB_USER', 'root'),
                 'PASSWORD': os.getenv('DB_PASSWORD', ''),
                 'HOST': os.getenv('DB_HOST', '127.0.0.1'),
@@ -147,6 +152,13 @@ if not DATABASE_URL:
                 'OPTIONS': {},
             }
         }
+    # else: keep default SQLite3
+
+# Ensure ENGINE is always set
+if not DATABASES.get('default', {}).get('ENGINE'):
+    DATABASES['default']['ENGINE'] = 'django.db.backends.sqlite3'
+    if 'NAME' not in DATABASES['default']:
+        DATABASES['default']['NAME'] = str(BASE_DIR / 'db.sqlite3')
 
 # If the chosen database backend is MySQL, ensure utf8mb4 and sane defaults
 def _ensure_mysql_options(db_conf: dict):
@@ -164,16 +176,10 @@ def _ensure_mysql_options(db_conf: dict):
 
 
 # Apply MySQL-specific options if applicable (covers both dj_database_url and manual config)
-if 'default' in locals() and isinstance(DATABASES, dict):
-    engine = DATABASES.get('default', {}).get('ENGINE', '') or ''
-# PyMySQL shim registration (safe if PyMySQL is installed)
-try:
-    if 'mysql' in (os.getenv('DB_ENGINE', '') or os.getenv('DATABASE_URL', '')):
-        import pymysql  # type: ignore
-
-        pymysql.install_as_MySQLdb()
-except Exception:
-    pass
+if DATABASES and 'default' in DATABASES:
+    engine = DATABASES.get('default', {}).get('ENGINE', '')
+    if engine and 'mysql' in engine.lower():
+        _ensure_mysql_options(DATABASES['default'])
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -248,19 +254,6 @@ REST_FRAMEWORK = {
     'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
 }
 
-# CORS/CSRF
-CORS_ALLOW_CREDENTIALS = True
-CORS_ALLOWED_ORIGINS = _list_env(os.getenv('CORS_ALLOWED_ORIGINS'), [
-    'http://localhost:3000',
-    'http://127.0.0.1:3000',
-])
-CORS_ALLOWED_ORIGIN_REGEXES = _list_env(os.getenv('CORS_ALLOWED_ORIGIN_REGEXES'))
-CSRF_TRUSTED_ORIGINS = _list_env(os.getenv('CSRF_TRUSTED_ORIGINS'), [
-    'http://localhost',
-    'http://localhost:3000',
-    'http://127.0.0.1',
-    'http://127.0.0.1:3000',
-])
 
 
 # JWT Settings
