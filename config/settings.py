@@ -1,5 +1,6 @@
-"""
+
 Django settings for DineOps project.
+
 
 This module imports from config.settings.base for all settings.
 You can override specific settings here or use environment-specific modules.

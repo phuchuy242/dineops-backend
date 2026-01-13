@@ -11,14 +11,14 @@ class Migration(migrations.Migration):
     dependencies = [
         ('dishingredient', '0001_initial'),
         ('ingredient', '0001_initial'),
-        ('products', '0001_initial'),
+        ('menu', '0001_initial'),
     ]
 
     operations = [
         migrations.AddField(
             model_name='dishingredient',
             name='dish',
-            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='products.products'),
+            field=models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='menu.product'),
         ),
         migrations.AddField(
             model_name='dishingredient',

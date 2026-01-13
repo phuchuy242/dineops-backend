@@ -44,6 +44,14 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-ez6gwzo(_$b*sfsu^&v2la_2$-
 DEBUG = _bool_env(os.getenv('DEBUG'), True)
 ALLOWED_HOSTS = _list_env(os.getenv('ALLOWED_HOSTS'), ['127.0.0.1', 'localhost'])
 
+# SSL/HTTPS Security (configure based on DEBUG status)
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year in production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -68,8 +76,6 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.staff',
     'apps.reports',
-    'apps.category',
-    'apps.products',
     'apps.ingredient',
     'apps.dishingredient',
 ]
@@ -178,6 +184,12 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 AUTH_USER_MODEL = "users.User"
 
+# Authentication Backends
+AUTHENTICATION_BACKENDS = [
+    'apps.users.backends.EmailOrUsernameOrPhoneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
@@ -224,28 +236,49 @@ CSRF_TRUSTED_ORIGINS = _list_env(
 )
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
     'DEFAULT_PAGINATION_CLASS': 'core.responses.StandardResultsSetPagination',
     'PAGE_SIZE': 10,
     'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
+    'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
 }
+
+# CORS/CSRF
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOWED_ORIGINS = _list_env(os.getenv('CORS_ALLOWED_ORIGINS'), [
+    'http://localhost:3000',
+    'http://127.0.0.1:3000',
+])
+CORS_ALLOWED_ORIGIN_REGEXES = _list_env(os.getenv('CORS_ALLOWED_ORIGIN_REGEXES'))
+CSRF_TRUSTED_ORIGINS = _list_env(os.getenv('CSRF_TRUSTED_ORIGINS'), [
+    'http://localhost',
+    'http://localhost:3000',
+    'http://127.0.0.1',
+    'http://127.0.0.1:3000',
+])
+
 
 # JWT Settings
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 8
+JWT_ACCESS_EXP_MINUTES = int(os.getenv('JWT_ACCESS_EXP_MINUTES', '15'))  # 15 minutes
+JWT_REFRESH_EXP_DAYS = int(os.getenv('JWT_REFRESH_EXP_DAYS', '7'))  # 7 days
 
-# Simple JWT Configuration - Only Access Token (No Refresh Token)
+# Login security settings
+LOGIN_MAX_ATTEMPTS = int(os.getenv('LOGIN_MAX_ATTEMPTS', '5'))
+LOGIN_LOCKOUT_SECONDS = int(os.getenv('LOGIN_LOCKOUT_SECONDS', '300'))  # 5 minutes
+
+# Simple JWT Configuration
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=int(os.getenv('JWT_ACCESS_TOKEN_HOURS', '8'))),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=0),  # Disabled
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_EXP_MINUTES', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_EXP_DAYS', '7'))),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
     'UPDATE_LAST_LOGIN': True,
@@ -269,5 +302,8 @@ SIMPLE_JWT = {
     'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
 
     'JTI_CLAIM': 'jti',
-}
 
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
+}
