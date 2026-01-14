@@ -1,7 +1,11 @@
-# urls.py for apps.tables
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import TableViewSet
+
+router = DefaultRouter()
+router.register(r'', TableViewSet, basename='table')
 
 urlpatterns = [
-    # Add app-specific URL patterns here when you create views
+    path('', include(router.urls)),
 ]
 

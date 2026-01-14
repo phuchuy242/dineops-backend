@@ -44,6 +44,14 @@ SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-ez6gwzo(_$b*sfsu^&v2la_2$-
 DEBUG = _bool_env(os.getenv('DEBUG'), True)
 ALLOWED_HOSTS = _list_env(os.getenv('ALLOWED_HOSTS'), ['127.0.0.1', 'localhost'])
 
+# SSL/HTTPS Security (configure based on DEBUG status)
+SECURE_SSL_REDIRECT = not DEBUG
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_HSTS_SECONDS = 31536000 if not DEBUG else 0  # 1 year in production
+SECURE_HSTS_INCLUDE_SUBDOMAINS = not DEBUG
+SECURE_HSTS_PRELOAD = not DEBUG
+
 
 # Application definition
 INSTALLED_APPS = [
@@ -68,8 +76,6 @@ INSTALLED_APPS = [
     'apps.inventory',
     'apps.staff',
     'apps.reports',
-    'apps.category',
-    'apps.products',
     'apps.ingredient',
     'apps.dishingredient',
 ]
@@ -108,32 +114,37 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 
-# Database
+# Database Configuration
 DATABASE_URL = os.getenv('DATABASE_URL')
+
+# Initialize DATABASES dict immediately with a safe default
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': str(BASE_DIR / 'db.sqlite3'),
+    }
+}
+
+# Try to use DATABASE_URL if provided
 if DATABASE_URL:
     try:
-        import dj_database_url  # optional
-
+        import dj_database_url
         DATABASES = {
             'default': dj_database_url.parse(DATABASE_URL, conn_max_age=600),
         }
-    except Exception:
-        DATABASE_URL = None
+    except Exception as e:
+        print(f"Warning: Failed to parse DATABASE_URL: {e}. Using SQLite3 instead.")
+        pass
+else:
+    # Use explicit DB_ENGINE setting if provided
+    DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3').strip()
 
-if not DATABASE_URL:
-    DB_ENGINE = os.getenv('DB_ENGINE', 'django.db.backends.sqlite3')
-    if DB_ENGINE == 'django.db.backends.sqlite3':
+    if DB_ENGINE and DB_ENGINE != 'django.db.backends.sqlite3':
+        # MySQL or other database backend
         DATABASES = {
             'default': {
                 'ENGINE': DB_ENGINE,
-                'NAME': BASE_DIR / 'db.sqlite3',
-            }
-        }
-    else:
-        DATABASES = {
-            'default': {
-                'ENGINE': DB_ENGINE,
-                'NAME': os.getenv('DB_NAME', 'menu_order_local'),
+                'NAME': os.getenv('DB_NAME', 'dineops_db'),
                 'USER': os.getenv('DB_USER', 'root'),
                 'PASSWORD': os.getenv('DB_PASSWORD', ''),
                 'HOST': os.getenv('DB_HOST', '127.0.0.1'),
@@ -141,6 +152,13 @@ if not DATABASE_URL:
                 'OPTIONS': {},
             }
         }
+    # else: keep default SQLite3
+
+# Ensure ENGINE is always set
+if not DATABASES.get('default', {}).get('ENGINE'):
+    DATABASES['default']['ENGINE'] = 'django.db.backends.sqlite3'
+    if 'NAME' not in DATABASES['default']:
+        DATABASES['default']['NAME'] = str(BASE_DIR / 'db.sqlite3')
 
 # If the chosen database backend is MySQL, ensure utf8mb4 and sane defaults
 def _ensure_mysql_options(db_conf: dict):
@@ -158,16 +176,10 @@ def _ensure_mysql_options(db_conf: dict):
 
 
 # Apply MySQL-specific options if applicable (covers both dj_database_url and manual config)
-if 'default' in locals() and isinstance(DATABASES, dict):
-    engine = DATABASES.get('default', {}).get('ENGINE', '') or ''
-# PyMySQL shim registration (safe if PyMySQL is installed)
-try:
-    if 'mysql' in (os.getenv('DB_ENGINE', '') or os.getenv('DATABASE_URL', '')):
-        import pymysql  # type: ignore
-
-        pymysql.install_as_MySQLdb()
-except Exception:
-    pass
+if DATABASES and 'default' in DATABASES:
+    engine = DATABASES.get('default', {}).get('ENGINE', '')
+    if engine and 'mysql' in engine.lower():
+        _ensure_mysql_options(DATABASES['default'])
 
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -178,26 +190,113 @@ AUTH_PASSWORD_VALIDATORS = [
 ]
 AUTH_USER_MODEL = "users.User"
 
+# Authentication Backends
+AUTHENTICATION_BACKENDS = [
+    'apps.users.backends.EmailOrUsernameOrPhoneBackend',
+    'django.contrib.auth.backends.ModelBackend',
+]
+
 LANGUAGE_CODE = 'en-us'
 TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 
 STATIC_URL = 'static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+MEDIA_URL = 'media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'mediafiles')
+
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# CORS Configuration
+CORS_ALLOW_ALL_ORIGINS = _bool_env(os.getenv('CORS_ALLOW_ALL_ORIGINS'), DEBUG)
+CORS_ALLOWED_ORIGINS = _list_env(
+    os.getenv('CORS_ALLOWED_ORIGINS'),
+    ['http://localhost:3000', 'http://127.0.0.1:3000']
+)
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_METHODS = [
+    'DELETE',
+    'GET',
+    'OPTIONS',
+    'PATCH',
+    'POST',
+    'PUT',
+]
+CORS_ALLOW_HEADERS = [
+    'accept',
+    'accept-encoding',
+    'authorization',
+    'content-type',
+    'dnt',
+    'origin',
+    'user-agent',
+    'x-csrftoken',
+    'x-requested-with',
+]
+
+# CSRF Configuration
+CSRF_TRUSTED_ORIGINS = _list_env(
+    os.getenv('CSRF_TRUSTED_ORIGINS'),
+    ['http://localhost:3000', 'http://127.0.0.1:3000']
+)
+
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [
-        'rest_framework.authentication.SessionAuthentication',
-    ],
-    'DEFAULT_PERMISSION_CLASSES': [
-        'rest_framework.permissions.AllowAny',
-    ],
-    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
-    'PAGE_SIZE': 20,
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+    ),
+    'DEFAULT_PERMISSION_CLASSES': (
+        'rest_framework.permissions.IsAuthenticated',
+    ),
+    'DEFAULT_PAGINATION_CLASS': 'core.responses.StandardResultsSetPagination',
+    'PAGE_SIZE': 10,
+    'EXCEPTION_HANDLER': 'core.exceptions.custom_exception_handler',
+    'DATETIME_FORMAT': "%Y-%m-%d %H:%M:%S",
 }
+
+
 
 # JWT Settings
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
-JWT_EXPIRATION_HOURS = 8
+JWT_ACCESS_EXP_MINUTES = int(os.getenv('JWT_ACCESS_EXP_MINUTES', '15'))  # 15 minutes
+JWT_REFRESH_EXP_DAYS = int(os.getenv('JWT_REFRESH_EXP_DAYS', '7'))  # 7 days
+
+# Login security settings
+LOGIN_MAX_ATTEMPTS = int(os.getenv('LOGIN_MAX_ATTEMPTS', '5'))
+LOGIN_LOCKOUT_SECONDS = int(os.getenv('LOGIN_LOCKOUT_SECONDS', '300'))  # 5 minutes
+
+# Simple JWT Configuration
+from datetime import timedelta
+
+SIMPLE_JWT = {
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_EXP_MINUTES', '15'))),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_EXP_DAYS', '7'))),
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'UPDATE_LAST_LOGIN': True,
+
+    'ALGORITHM': JWT_ALGORITHM,
+    'SIGNING_KEY': JWT_SECRET_KEY,
+    'VERIFYING_KEY': None,
+    'AUDIENCE': None,
+    'ISSUER': None,
+    'JWK_URL': None,
+    'LEEWAY': 0,
+
+    'AUTH_HEADER_TYPES': ('Bearer',),
+    'AUTH_HEADER_NAME': 'HTTP_AUTHORIZATION',
+    'USER_ID_FIELD': 'id',
+    'USER_ID_CLAIM': 'user_id',
+    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
+
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
+
+    'JTI_CLAIM': 'jti',
+
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
+}

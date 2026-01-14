@@ -1,198 +1,319 @@
 from rest_framework import status
-from rest_framework.response import Response
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.permissions import AllowAny
-
-from .serializers import RegisterSerializer, LoginSerializer
-from .jwt_utils import generate_access_token, generate_refresh_token, decode_jwt, hash_token, _env_sig
-from .models import RefreshToken
-
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.utils import timezone
+from rest_framework_simplejwt.tokens import RefreshToken as SimpleJWTRefreshToken
+from core.responses import success_response, error_response
+from .serializers import (
+    RegisterSerializer,
+    LoginSerializer,
+    UserSerializer,
+    PasswordChangeSerializer,
+    RefreshTokenSerializer,
+)
+from .models import RefreshToken
 import jwt
+import hashlib
 
 
-def _format_response(status_val: int, code: int, msg: str, data: dict | None = None):
-    """Standard response format used by users endpoints."""
-    payload = {
-        "status": int(bool(status_val)),
-        "code": int(code),
-        "msg": msg,
-    }
-    if data is not None:
-        payload["data"] = data
-    return payload
-
-
-@api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def register(request):
+
     serializer = RegisterSerializer(data=request.data)
 
     if not serializer.is_valid():
-        return Response(
-            _format_response(False, status.HTTP_400_BAD_REQUEST, "Validation error", {"errors": serializer.errors}),
-            status=status.HTTP_400_BAD_REQUEST,
+        return error_response(
+            msg="Dữ liệu không hợp lệ",
+            errors=serializer.errors,
+            code=status.HTTP_400_BAD_REQUEST
         )
 
-    user = serializer.save()
+    try:
+        # Create user
+        user = serializer.save()
 
-    return Response(
-        _format_response(True, status.HTTP_201_CREATED, "Register success", {
-            "uuid": str(user.uuid),
-            "user_name": user.user_name,
-            "email": user.email,
-            "first_name": user.first_name,
-            "last_name": user.last_name,
-            "full_name": user.full_name,
-            "phone_number": user.phone_number,
-            "is_active": user.is_active,
-            "is_verified": user.is_verified,
-            "created_at": user.created_at,
-        }),
-        status=status.HTTP_201_CREATED,
-    )
+        # Generate tokens using SimpleJWT
+        refresh = SimpleJWTRefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token_str = str(refresh)
+
+        # Store refresh token in database
+        RefreshToken.objects.create(
+            jti=str(refresh['jti']),
+            user=user,
+            token_hash=hashlib.sha256(refresh_token_str.encode()).hexdigest(),
+            expires_at=timezone.now() + timezone.timedelta(days=7)
+        )
+
+        # Serialize user data
+        user_data = UserSerializer(user).data
+
+        data = {
+            'access_token': access_token,
+            'refresh_token': refresh_token_str,
+            'token_type': 'Bearer',
+            'expires_in': 900,  # 15 minutes in seconds
+            'user': user_data
+        }
+
+        return success_response(
+            data=data,
+            msg='User registered successfully',
+            code=status.HTTP_201_CREATED
+        )
+
+    except Exception as e:
+        return error_response(
+            msg=f'Registration failed: {str(e)}',
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 
-@api_view(["POST"])
+@api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-    serializer = LoginSerializer(data=request.data, context={"request": request})
+    serializer = LoginSerializer(data=request.data, context={'request': request})
 
     if not serializer.is_valid():
-        # prefer returning explicit serializer error detail if present (e.g. lockout)
-        errors = serializer.errors
-        # serializer.errors may be dict; try detail key or first error message
-        msg = None
-        if isinstance(errors, dict):
-            msg = errors.get('detail') or errors.get('non_field_errors')
-            if isinstance(msg, list):
-                msg = msg[0] if msg else None
-        if not msg:
-            msg = "Username or password is incorrect"
-        return Response(
-            _format_response(0, 400, str(msg), {"errors": errors}),
-            status=status.HTTP_400_BAD_REQUEST,
+        return error_response(
+            msg="Login failed",
+            errors=serializer.errors,
+            code=status.HTTP_401_UNAUTHORIZED
         )
 
-    # Get authenticated user
-    user = serializer.validated_data["user"]
+    try:
+        user = serializer.validated_data['user']
 
-    # Generate tokens
-    access_token = generate_access_token(user)
-    refresh_token, jti, expires_at = generate_refresh_token(user)
+        # Generate tokens using SimpleJWT
+        refresh = SimpleJWTRefreshToken.for_user(user)
+        access_token = str(refresh.access_token)
+        refresh_token_str = str(refresh)
 
-    # Store hashed refresh token for stateful revoke/rotation
-    token_hash = hash_token(refresh_token)
-    RefreshToken.objects.create(user=user, jti=jti, token_hash=token_hash, expires_at=expires_at)
+        # Store refresh token in database
+        RefreshToken.objects.create(
+            jti=str(refresh['jti']),
+            user=user,
+            token_hash=hashlib.sha256(refresh_token_str.encode()).hexdigest(),
+            expires_at=timezone.now() + timezone.timedelta(days=7)
+        )
 
-    # Update last login time
-    user.last_login_at = timezone.now()
-    user.save(update_fields=["last_login_at"])
+        # Serialize user data
+        user_data = UserSerializer(user).data
 
-    return Response(
-        _format_response(1, 200, "login.successful", {"access": access_token, "refresh": refresh_token}),
-        status=status.HTTP_200_OK,
+        data = {
+            'access_token': access_token,
+            'refresh_token': refresh_token_str,
+            'token_type': 'Bearer',
+            'expires_in': 900,  # 15 minutes in seconds
+            'user': user_data
+        }
+
+        return success_response(
+            data=data,
+            msg='Login successful',
+            code=status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        return error_response(
+            msg=f'Login failed: {str(e)}',
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([AllowAny])
+def refresh_token(request):
+
+    serializer = RefreshTokenSerializer(data=request.data)
+
+    if not serializer.is_valid():
+        return error_response(
+            msg="Invalid data",
+            errors=serializer.errors,
+            code=status.HTTP_400_BAD_REQUEST
+        )
+
+    refresh_token_str = serializer.validated_data['refresh_token']
+
+    try:
+        # Verify and decode refresh token using SimpleJWT
+        refresh = SimpleJWTRefreshToken(refresh_token_str)
+        user_id = refresh.get('user_id')
+        jti = str(refresh.get('jti'))
+
+        # Check if refresh token exists and is valid in database
+        token_hash = hashlib.sha256(refresh_token_str.encode()).hexdigest()
+        refresh_token_obj = RefreshToken.objects.filter(
+            jti=jti,
+            token_hash=token_hash,
+            user_id=user_id,
+            revoked=False,
+            expires_at__gt=timezone.now()
+        ).first()
+
+        if not refresh_token_obj:
+            return error_response(
+                msg="Refresh token is invalid or has expired",
+                code=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Get user
+        user = refresh_token_obj.user
+
+        if not user.is_active:
+            return error_response(
+                msg="Account has been disabled",
+                code=status.HTTP_401_UNAUTHORIZED
+            )
+
+        # Mark refresh token as used
+        refresh_token_obj.mark_used()
+
+        # Generate new access token using SimpleJWT
+        access_token = str(refresh.access_token)
+
+        data = {
+            'access_token': access_token,
+            'token_type': 'Bearer',
+            'expires_in': 900,
+        }
+
+        return success_response(
+            data=data,
+            msg='Token refreshed successfully',
+            code=status.HTTP_200_OK
+        )
+
+    except jwt.ExpiredSignatureError:
+        return error_response(
+            msg="Refresh token has expired",
+            code=status.HTTP_401_UNAUTHORIZED
+        )
+    except jwt.InvalidTokenError as e:
+        return error_response(
+            msg=f"Invalid refresh token: {str(e)}",
+            code=status.HTTP_401_UNAUTHORIZED
+        )
+    except Exception as e:
+        return error_response(
+            msg=f"Token refresh failed: {str(e)}",
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def logout(request):
+
+    user = request.user
+    refresh_token_str = request.data.get('refresh_token')
+
+    try:
+        if refresh_token_str:
+            # Revoke specific refresh token
+            token_hash = hashlib.sha256(refresh_token_str.encode()).hexdigest()
+            RefreshToken.objects.filter(
+                user=user,
+                token_hash=token_hash,
+                revoked=False
+            ).update(revoked=True)
+        else:
+            # Revoke all refresh tokens for this user
+            RefreshToken.objects.filter(
+                user=user,
+                revoked=False
+            ).update(revoked=True)
+
+        return success_response(
+            msg='Logged out successfully',
+            code=status.HTTP_200_OK
+        )
+
+    except Exception as e:
+        return error_response(
+            msg=f'Logout failed: {str(e)}',
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def profile(request):
+
+    user = request.user
+    user_data = UserSerializer(user).data
+
+    return success_response(
+        data=user_data,
+        msg='User profile retrieved successfully',
+        code=status.HTTP_200_OK
     )
 
 
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def refresh_token(request):
-    """Exchange a valid refresh token for a new access token (and rotate refresh token).
+@api_view(['PUT', 'PATCH'])
+@permission_classes([IsAuthenticated])
+def update_profile(request):
 
-    Expected POST body: {"refresh": "<token>"}
-    """
-    refresh = request.data.get("refresh")
-    if not refresh:
-        return Response(_format_response(0, 400, "Missing refresh token"), status=status.HTTP_400_BAD_REQUEST)
+    user = request.user
+
+    # Only allow updating certain fields
+    allowed_fields = ['first_name', 'last_name', 'avatar_url']
 
     try:
-        payload = decode_jwt(refresh)
-    except jwt.ExpiredSignatureError:
-        return Response(_format_response(0, 401, "Refresh token expired"), status=status.HTTP_401_UNAUTHORIZED)
-    except jwt.InvalidTokenError:
-        return Response(_format_response(0, 400, "Invalid refresh token"), status=status.HTTP_400_BAD_REQUEST)
+        for field in allowed_fields:
+            if field in request.data:
+                setattr(user, field, request.data[field])
 
-    if payload.get("token_type") != "refresh":
-        return Response(_format_response(0, 400, "Invalid token type"), status=status.HTTP_400_BAD_REQUEST)
+        user.save()
+        user_data = UserSerializer(user).data
 
-    jti = payload.get("jti")
-    uuid = payload.get("uuid")
-    if not jti or not uuid:
-        return Response(_format_response(0, 400, "Invalid token payload"), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            data=user_data,
+            msg='Profile updated successfully',
+            code=status.HTTP_200_OK
+        )
 
-    # Find stored refresh token record
-    try:
-        token_obj = RefreshToken.objects.get(jti=jti, user__uuid=uuid)
-    except RefreshToken.DoesNotExist:
-        return Response(_format_response(0, 401, "Refresh token not found or revoked"), status=status.HTTP_401_UNAUTHORIZED)
-
-    # Verify not revoked and not expired
-    if token_obj.revoked:
-        return Response(_format_response(0, 401, "Refresh token revoked"), status=status.HTTP_401_UNAUTHORIZED)
-
-    now = timezone.now()
-    if token_obj.expires_at and token_obj.expires_at < now:
-        # revoke expired token
-        token_obj.revoked = True
-        token_obj.save(update_fields=["revoked"])
-        return Response(_format_response(0, 401, "Refresh token expired"), status=status.HTTP_401_UNAUTHORIZED)
-
-    # Verify env_sig matches current user state
-    user = token_obj.user
-    if payload.get('env_sig') != _env_sig(user):
-        return Response(_format_response(0, 401, "Token environment mismatch"), status=status.HTTP_401_UNAUTHORIZED)
-
-    # Validate token string matches stored hash (prevent database only token use)
-    if token_obj.token_hash != hash_token(refresh):
-        return Response(_format_response(0, 401, "Invalid refresh token"), status=status.HTTP_401_UNAUTHORIZED)
-
-    # Rotate: revoke old token and issue new refresh + access
-    token_obj.revoked = True
-    token_obj.save(update_fields=["revoked"])
-
-    user = token_obj.user
-    access_token = generate_access_token(user)
-    new_refresh, new_jti, new_exp = generate_refresh_token(user)
-    new_hash = hash_token(new_refresh)
-    RefreshToken.objects.create(user=user, jti=new_jti, token_hash=new_hash, expires_at=new_exp)
-
-    # mark used
-    token_obj.mark_used()
-
-    return Response(_format_response(1, 200, "token.refreshed", {"access": access_token, "refresh": new_refresh}), status=status.HTTP_200_OK)
+    except Exception as e:
+        return error_response(
+            msg=f'Update failed: {str(e)}',
+            code=status.HTTP_400_BAD_REQUEST
+        )
 
 
-@api_view(["POST"])
-@permission_classes([AllowAny])
-def logout(request):
-    """Revoke a refresh token (log out). Expect {"refresh": "..."} in POST body."""
-    refresh = request.data.get("refresh")
-    if not refresh:
-        return Response(_format_response(0, 400, "Missing refresh token"), status=status.HTTP_400_BAD_REQUEST)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def change_password(request):
+
+    serializer = PasswordChangeSerializer(
+        data=request.data,
+        context={'request': request}
+    )
+
+    if not serializer.is_valid():
+        return error_response(
+            msg="Invalid data",
+            errors=serializer.errors,
+            code=status.HTTP_400_BAD_REQUEST
+        )
 
     try:
-        payload = decode_jwt(refresh)
-    except jwt.InvalidTokenError:
-        return Response(_format_response(0, 400, "Invalid refresh token"), status=status.HTTP_400_BAD_REQUEST)
+        serializer.save()
 
-    if payload.get("token_type") != "refresh":
-        return Response(_format_response(0, 400, "Invalid token type"), status=status.HTTP_400_BAD_REQUEST)
+        # Revoke all refresh tokens after password change for security
+        RefreshToken.objects.filter(
+            user=request.user,
+            revoked=False
+        ).update(revoked=True)
 
-    jti = payload.get("jti")
-    uuid = payload.get("uuid")
-    if not jti or not uuid:
-        return Response(_format_response(0, 400, "Invalid token payload"), status=status.HTTP_400_BAD_REQUEST)
+        return success_response(
+            msg='Password changed successfully. Please login again.',
+            code=status.HTTP_200_OK
+        )
 
-    try:
-        token_obj = RefreshToken.objects.get(jti=jti, user__uuid=uuid)
-    except RefreshToken.DoesNotExist:
-        return Response(_format_response(0, 404, "Refresh token not found"), status=status.HTTP_404_NOT_FOUND)
-
-    # Verify env_sig matches current user state
-    if payload.get('env_sig') != _env_sig(token_obj.user):
-        return Response(_format_response(0, 401, "Token environment mismatch"), status=status.HTTP_401_UNAUTHORIZED)
-
-    token_obj.revoke()
-
-    return Response(_format_response(1, 200, "logged_out"), status=status.HTTP_200_OK)
+    except Exception as e:
+        return error_response(
+            msg=f'Password change failed: {str(e)}',
+            code=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )

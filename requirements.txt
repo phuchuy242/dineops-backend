@@ -1,5 +1,6 @@
 Django>=5.2,<6
 djangorestframework
+djangorestframework-simplejwt
 python-dotenv
 PyJWT
 # MySQL drivers: choose one
@@ -12,3 +13,8 @@ mysqlclient
 dj-database-url
 
 django-cors-headers
+
+# Production server
+gunicorn
+requests
+

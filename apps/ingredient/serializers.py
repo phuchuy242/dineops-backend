@@ -1,13 +1,10 @@
-# serializers.py for apps.tables
-# Minimal template for Django REST Framework serializers.
-
 from rest_framework import serializers
+from .models import Ingredient
 
-# Example template (commented out until you add models):
-# from .models import Table
-#
-# class TableSerializer(serializers.ModelSerializer):
-#     class Meta:
-#         model = Table
-#         fields = '__all__'
 
+class IngredientSerializer(serializers.ModelSerializer):
+    """Serializer for Ingredient model"""
+
+    class Meta:
+        model = Ingredient
+        fields = '__all__'

@@ -33,8 +33,4 @@ else:
 # Ensure AUTH_USER_MODEL remains consistent with base settings
 AUTH_USER_MODEL = globals().get('AUTH_USER_MODEL', 'users.User')
 
-REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
-}
+# Keep REST_FRAMEWORK from base; override here only if needed for local

@@ -1,7 +1,11 @@
 # urls.py for apps.staff
-from django.urls import path
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
+from .views import RoleViewSet
+
+router = DefaultRouter()
+router.register(r'roles', RoleViewSet, basename='role')
 
 urlpatterns = [
-    # Add app-specific URL patterns here when you create views
+    path('', include(router.urls)),
 ]
-
