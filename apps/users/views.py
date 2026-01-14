@@ -73,40 +73,6 @@ def register(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def login(request):
-    """
-    User login.
-
-    Request body:
-    {
-        "identifier": "user@example.com",  # Email, Username, or Phone Number
-        "password": "SecurePass123"
-    }
-
-    Or specific fields:
-    {
-        "email": "user@example.com",
-        "password": "SecurePass123"
-    }
-
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "Đăng nhập thành công",
-        "data": {
-            "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "token_type": "Bearer",
-            "expires_in": 900,
-            "user": {
-                "id": 1,
-                "uuid": "123e4567-e89b-12d3-a456-426614174000",
-                "email": "user@example.com",
-                ...
-            }
-        }
-    }
-    """
     serializer = LoginSerializer(data=request.data, context={'request': request})
 
     if not serializer.is_valid():
@@ -159,26 +125,7 @@ def login(request):
 @api_view(['POST'])
 @permission_classes([AllowAny])
 def refresh_token(request):
-    """
-    Refresh access token using refresh token.
 
-    Request body:
-    {
-        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc..."
-    }
-
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "Token đã được làm mới",
-        "data": {
-            "access_token": "eyJ0eXAiOiJKV1QiLCJhbGc...",
-            "token_type": "Bearer",
-            "expires_in": 900
-        }
-    }
-    """
     serializer = RefreshTokenSerializer(data=request.data)
 
     if not serializer.is_valid():
@@ -259,21 +206,7 @@ def refresh_token(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def logout(request):
-    """
-    User logout - revokes all refresh tokens.
 
-    Request body (optional):
-    {
-        "refresh_token": "eyJ0eXAiOiJKV1QiLCJhbGc..."  # If provided, revokes only this token
-    }
-
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "Đăng xuất thành công"
-    }
-    """
     user = request.user
     refresh_token_str = request.data.get('refresh_token')
 
@@ -308,24 +241,7 @@ def logout(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def profile(request):
-    """
-    Get current user profile.
 
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "User profile retrieved successfully",
-        "data": {
-            "id": 1,
-            "uuid": "123e4567-e89b-12d3-a456-426614174000",
-            "email": "user@example.com",
-            "user_name": "username",
-            "full_name": "John Doe",
-            ...
-        }
-    }
-    """
     user = request.user
     user_data = UserSerializer(user).data
 
@@ -339,28 +255,7 @@ def profile(request):
 @api_view(['PUT', 'PATCH'])
 @permission_classes([IsAuthenticated])
 def update_profile(request):
-    """
-    Update current user profile.
 
-    Request body:
-    {
-        "first_name": "John",
-        "last_name": "Doe",
-        "avatar_url": "https://example.com/avatar.jpg"
-    }
-
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "Cập nhật thông tin thành công",
-        "data": {
-            "id": 1,
-            "uuid": "123e4567-e89b-12d3-a456-426614174000",
-            ...
-        }
-    }
-    """
     user = request.user
 
     # Only allow updating certain fields
@@ -390,23 +285,7 @@ def update_profile(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def change_password(request):
-    """
-    Change user password.
 
-    Request body:
-    {
-        "old_password": "OldPass123",
-        "new_password": "NewPass123",
-        "new_password_confirm": "NewPass123"
-    }
-
-    Response:
-    {
-        "status": true,
-        "code": 200,
-        "msg": "Password changed successfully"
-    }
-    """
     serializer = PasswordChangeSerializer(
         data=request.data,
         context={'request': request}
