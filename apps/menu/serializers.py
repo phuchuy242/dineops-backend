@@ -3,7 +3,6 @@ from .models import Category, Product, ProductVariant, Topping
 
 
 class CategorySerializer(serializers.ModelSerializer):
-    """Serializer for Category model"""
     products_count = serializers.SerializerMethodField()
 
     class Meta:

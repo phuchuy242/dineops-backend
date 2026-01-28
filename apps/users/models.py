@@ -34,7 +34,7 @@ class UserManager(BaseUserManager):
         extra_fields.setdefault("is_superuser", True)
         extra_fields.setdefault("is_active", True)
 
-        # Superuser thường bắt buộc cần email hoặc username để quản lý
+        # Supe ruser thường bắt buộc cần email hoặc username để quản lý
         if not email:
             raise ValueError("Superuser phải có email")
 

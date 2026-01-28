@@ -16,6 +16,16 @@ class TableViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
     pagination_class = StandardResultsSetPagination
     search_fields = ['table_number', 'location']
 
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Filter by status
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
+
     @action(detail=False, methods=['get'])
     def available(self, request):
         """Get all available tables"""
@@ -23,19 +33,6 @@ class TableViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
         serializer = TableSerializer(tables, many=True)
         return success_response(data=serializer.data, msg='Available tables retrieved successfully')
 
-    @action(detail=False, methods=['get'])
-    def occupied(self, request):
-        """Get all occupied tables"""
-        tables = Table.objects.filter(status='occupied')
-        serializer = TableSerializer(tables, many=True)
-        return success_response(data=serializer.data, msg='Occupied tables retrieved successfully')
-
-    @action(detail=False, methods=['get'])
-    def reserved(self, request):
-        """Get all reserved tables"""
-        tables = Table.objects.filter(status='reserved')
-        serializer = TableSerializer(tables, many=True)
-        return success_response(data=serializer.data, msg='Reserved tables retrieved successfully')
 
     @action(detail=True, methods=['patch'], url_path='update-status')
     def update_status(self, request, pk=None):

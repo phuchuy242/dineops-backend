@@ -2,7 +2,8 @@ from rest_framework import serializers
 from .models import Order, OrderItem, OrderItemTopping
 from apps.tables.serializers import TableSerializer
 from apps.menu.serializers import ProductVariantSerializer, ToppingSerializer
-
+from apps.menu.models import ProductVariant
+from apps.tables.models import Table
 
 class OrderItemToppingSerializer(serializers.ModelSerializer):
     """Serializer for OrderItemTopping model"""
@@ -47,9 +48,9 @@ class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['id', 'table', 'table_details', 'table_number', 'user', 'user_name',
-                  'status', 'status_display', 'notes', 'total_amount', 'items', 'items_count',
+                  'status', 'status_display', 'pay_code', 'notes', 'total_amount', 'items', 'items_count',
                   'created_at', 'updated_at', 'confirmed_at', 'served_at', 'completed_at']
-        read_only_fields = ['id', 'user', 'total_amount', 'created_at', 'updated_at',
+        read_only_fields = ['id', 'user', 'pay_code', 'total_amount', 'created_at', 'updated_at',
                            'confirmed_at', 'served_at', 'completed_at']
 
     def get_items_count(self, obj):
@@ -66,9 +67,9 @@ class OrderListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
         fields = ['id', 'table', 'table_number', 'user', 'user_name',
-                  'status', 'status_display', 'total_amount', 'items_count',
+                  'status', 'status_display', 'pay_code', 'total_amount', 'items_count',
                   'created_at', 'updated_at']
-        read_only_fields = ['id', 'user', 'total_amount', 'created_at', 'updated_at']
+        read_only_fields = ['id', 'user', 'pay_code', 'total_amount', 'created_at', 'updated_at']
 
     def get_items_count(self, obj):
         return obj.items.count()
@@ -78,3 +79,44 @@ class OrderStatusUpdateSerializer(serializers.Serializer):
     """Serializer for updating order status"""
     status = serializers.ChoiceField(choices=Order.STATUS_CHOICES)
 
+
+# --- Create Serializers ---
+
+class OrderItemCreateSerializer(serializers.Serializer):
+    """Serializer for creating order items within an order"""
+    variant = serializers.PrimaryKeyRelatedField(queryset=ProductVariant.objects.all())
+    quantity = serializers.IntegerField(min_value=1)
+    notes = serializers.CharField(required=False, allow_blank=True)
+
+class OrderCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating an order with items"""
+    items = OrderItemCreateSerializer(many=True)
+    table = serializers.PrimaryKeyRelatedField(queryset=Table.objects.all())
+
+    class Meta:
+        model = Order
+        fields = ['table', 'items', 'notes']
+
+    def create(self, validated_data):
+        items_data = validated_data.pop('items')
+        
+        # 1. Create Order
+        order = Order.objects.create(**validated_data)
+        
+        # 2. Create OrderItems
+        for item_data in items_data:
+            variant = item_data['variant']
+            quantity = item_data['quantity']
+            notes = item_data.get('notes', '')
+            
+            OrderItem.objects.create(
+                order=order,
+                variant=variant,
+                quantity=quantity,
+                price=variant.price, # Snapshot price
+                notes=notes
+            )
+            
+        # 3. Calculate total
+        order.calculate_total()
+        return order

@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.db.models import Q
 
 from .models import Category, Product, ProductVariant, Topping
@@ -17,10 +17,9 @@ from core.mixins import FilterSortMixin, StandardResponseMixin
 
 
 class CategoryViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    """ViewSet for Category CRUD operations"""
+    """ViewSet for Category CRUD operations - Public Read, Authenticated Write"""
     queryset = Category.objects.all()
     serializer_class = CategorySerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['name', 'description']
 
@@ -29,19 +28,22 @@ class CategoryViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelView
             return CategoryDetailSerializer
         return CategorySerializer
 
-    @action(detail=True, methods=['get'])
-    def products(self, request, pk=None):
-        """Get all products in a category"""
-        category = self.get_object()
-        products = category.products.filter(is_active=True)
-        serializer = ProductListSerializer(products, many=True)
-        return success_response(data=serializer.data, msg='Products retrieved successfully')
+    def get_permissions(self):
+        """
+        Allow public read access (GET requests)
+        Require authentication for write operations (POST, PUT, DELETE)
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
 
 
 class ProductViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    """ViewSet for Product CRUD operations"""
+    """ViewSet for Product CRUD operations - Public Read, Authenticated Write"""
     queryset = Product.objects.all()
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['name', 'description']
 
@@ -50,15 +52,19 @@ class ProductViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewS
             return ProductListSerializer
         return ProductSerializer
 
-    @action(detail=True, methods=['get'])
-    def variants(self, request, pk=None):
-        """Get all variants of a product"""
-        product = self.get_object()
-        variants = product.variants.filter(is_active=True)
-        serializer = ProductVariantSerializer(variants, many=True)
-        return success_response(data=serializer.data, msg='Variants retrieved successfully')
+    def get_permissions(self):
+        """
+        Allow public read access (GET requests)
+        Require authentication for write operations (POST, PUT, DELETE)
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
 
-    @action(detail=False, methods=['get'], url_path='by-category')
+
+    @action(detail=False, methods=['get'], url_path='by-category', permission_classes=[AllowAny])
     def by_category(self, request):
         """Get products filtered by category"""
         category_id = request.query_params.get('category_id')
@@ -71,14 +77,24 @@ class ProductViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewS
 
 
 class ProductVariantViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    """ViewSet for ProductVariant CRUD operations"""
+    """ViewSet for ProductVariant CRUD operations - Public Read, Authenticated Write"""
     queryset = ProductVariant.objects.all()
     serializer_class = ProductVariantSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['product__name', 'size']
 
-    @action(detail=False, methods=['get'], url_path='by-product')
+    def get_permissions(self):
+        """
+        Allow public read access (GET requests)
+        Require authentication for write operations (POST, PUT, DELETE)
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    @action(detail=False, methods=['get'], url_path='by-product', permission_classes=[AllowAny])
     def by_product(self, request):
         """Get variants filtered by product"""
         product_id = request.query_params.get('product_id')
@@ -91,14 +107,24 @@ class ProductVariantViewSet(FilterSortMixin, StandardResponseMixin, viewsets.Mod
 
 
 class ToppingViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    """ViewSet for Topping CRUD operations"""
+    """ViewSet for Topping CRUD operations - Public Read, Authenticated Write"""
     queryset = Topping.objects.all()
     serializer_class = ToppingSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['name']
 
-    @action(detail=False, methods=['get'], url_path='search')
+    def get_permissions(self):
+        """
+        Allow public read access (GET requests)
+        Require authentication for write operations (POST, PUT, DELETE)
+        """
+        if self.action in ['list', 'retrieve']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    @action(detail=False, methods=['get'], url_path='search', permission_classes=[AllowAny])
     def search(self, request):
         """Search toppings by name"""
         query = request.query_params.get('q', '')

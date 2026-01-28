@@ -2,6 +2,8 @@ from django.db import models
 from django.conf import settings
 from apps.tables.models import Table
 from apps.menu.models import ProductVariant, Topping
+import random
+import string
 
 
 class Order(models.Model):
@@ -18,6 +20,7 @@ class Order(models.Model):
     table = models.ForeignKey(Table, on_delete=models.CASCADE, related_name='orders')
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='orders')
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    pay_code = models.CharField(max_length=50, unique=True, null=True, blank=True)
     notes = models.TextField(blank=True, null=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -32,6 +35,19 @@ class Order(models.Model):
 
     def __str__(self):
         return f"Order #{self.id} - Table {self.table.table_number}"
+
+    @staticmethod
+    def generate_pay_code():
+        characters = string.ascii_uppercase + string.digits
+        while True:
+            code = ''.join(random.choice(characters) for _ in range(8))
+            if not Order.objects.filter(pay_code=code).exists():
+                return code
+
+    def save(self, *args, **kwargs):
+        if not self.pay_code:
+            self.pay_code = self.generate_pay_code()
+        super().save(*args, **kwargs)
 
     def calculate_total(self):
         """Calculate total amount from order items"""
