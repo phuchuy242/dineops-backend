@@ -80,6 +80,27 @@ class OrderStatusUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=Order.STATUS_CHOICES)
 
 
+class OrderHistorySerializer(serializers.ModelSerializer):
+    """Serializer for viewing order history with all items timeline"""
+    table_number = serializers.CharField(source='table.table_number', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    status_display = serializers.CharField(source='get_status_display', read_only=True)
+    items = OrderItemSerializer(many=True, read_only=True)
+    items_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Order
+        fields = ['id', 'table', 'table_number', 'user', 'user_name',
+                  'status', 'status_display', 'pay_code', 'notes', 'total_amount',
+                  'items', 'items_count',
+                  'created_at', 'updated_at', 'confirmed_at', 'served_at', 'completed_at']
+        read_only_fields = ['id', 'user', 'pay_code', 'total_amount', 'created_at', 'updated_at',
+                           'confirmed_at', 'served_at', 'completed_at']
+
+    def get_items_count(self, obj):
+        return obj.items.count()
+
+
 # --- Create Serializers ---
 
 class OrderItemCreateSerializer(serializers.Serializer):
@@ -99,10 +120,27 @@ class OrderCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         items_data = validated_data.pop('items')
-        
-        # 1. Create Order
-        order = Order.objects.create(**validated_data)
-        
+        table = validated_data['table']
+
+        # 1. Check if there's an active order for this table
+        # Active statuses: pending, confirmed, preparing, served
+        # Exclude awaiting_payment (user needs to cancel payment first)
+        active_order = Order.objects.filter(
+            table=table,
+            status__in=['pending', 'confirmed', 'preparing', 'served']
+        ).first()
+
+        if active_order:
+            # Use existing active order
+            order = active_order
+            # Update notes if provided
+            if validated_data.get('notes'):
+                order.notes = (order.notes or '') + '\n' + validated_data['notes']
+                order.save()
+        else:
+            # Create new order
+            order = Order.objects.create(**validated_data)
+
         # 2. Create OrderItems
         for item_data in items_data:
             variant = item_data['variant']
@@ -113,10 +151,10 @@ class OrderCreateSerializer(serializers.ModelSerializer):
                 order=order,
                 variant=variant,
                 quantity=quantity,
-                price=variant.price, # Snapshot price
+                price=variant.price,
                 notes=notes
             )
-            
+
         # 3. Calculate total
         order.calculate_total()
         return order

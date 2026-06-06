@@ -40,7 +40,6 @@ class CategoryViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelView
         return [permission() for permission in permission_classes]
 
 
-
 class ProductViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
     """ViewSet for Product CRUD operations - Public Read, Authenticated Write"""
     queryset = Product.objects.all()

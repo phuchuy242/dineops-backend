@@ -10,6 +10,7 @@ class Order(models.Model):
     """Order model for customer orders"""
     STATUS_CHOICES = [
         ('pending', 'Pending'),
+        ('awaiting_payment', 'Awaiting Payment'),
         ('confirmed', 'Confirmed'),
         ('preparing', 'Preparing'),
         ('served', 'Served'),

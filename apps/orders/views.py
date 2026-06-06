@@ -6,7 +6,7 @@ from django.utils import timezone
 from .models import Order, OrderItem, OrderItemTopping
 from .serializers import (
     OrderSerializer, OrderListSerializer, OrderStatusUpdateSerializer,
-    OrderItemSerializer, OrderItemToppingSerializer, OrderCreateSerializer
+    OrderItemSerializer, OrderItemToppingSerializer, OrderCreateSerializer, OrderHistorySerializer
 )
 from core.responses import success_response, error_response, created_response, StandardResultsSetPagination
 from core.mixins import FilterSortMixin, StandardResponseMixin
@@ -51,7 +51,17 @@ class OrderViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
         user = request.user if request.user.is_authenticated else None
         
         order = serializer.save(user=user)
-        return created_response(data=OrderSerializer(order).data, msg='Order created successfully')
+
+        # Check if order was created or merged with existing
+        msg = 'Order created successfully'
+        if order.items.count() > 1:  # Simple heuristic: if multiple items, likely merged
+            # More accurate: check if order.updated_at is very close to now (within 1 second)
+            from django.utils import timezone
+            from datetime import timedelta
+            if (timezone.now() - order.updated_at) < timedelta(seconds=2):
+                msg = 'Items added to existing order successfully'
+
+        return created_response(data=OrderSerializer(order).data, msg=msg)
 
 
     @action(detail=False, methods=['get'])
@@ -81,15 +91,18 @@ class OrderViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
 
     @action(detail=False, methods=['get'], url_path='by-paycode')
     def by_paycode(self, request):
-        """Get order by pay_code"""
+        """Get order by pay_code with full order history (all items and toppings)"""
         pay_code = request.query_params.get('pay_code')
         if not pay_code:
             return error_response(msg='pay_code parameter is required', code=400)
 
         try:
             order = self.get_queryset().get(pay_code=pay_code)
-            serializer = OrderSerializer(order)
-            return success_response(data=serializer.data, msg='Order retrieved successfully')
+            serializer = OrderHistorySerializer(order)
+            return success_response(
+                data=serializer.data,
+                msg='Order retrieved successfully with full history'
+            )
         except Order.DoesNotExist:
             return error_response(msg='Order not found with this pay_code', code=404)
 
@@ -114,6 +127,32 @@ class OrderViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
 
         response_serializer = OrderSerializer(order)
         return success_response(data=response_serializer.data, msg='Order status updated successfully')
+
+    def destroy(self, request, *args, **kwargs):
+        """Delete an order - only allowed for pending or cancelled orders"""
+        order = self.get_object()
+
+        # Only allow deletion of pending or cancelled orders
+        if order.status not in ['pending', 'cancelled']:
+            return error_response(
+                msg=f'Cannot delete order with status "{order.get_status_display()}". Only pending or cancelled orders can be deleted.',
+                code=400
+            )
+
+        # Check if order has associated payment
+        if hasattr(order, 'payment') and order.payment.payment_status == 'paid':
+            return error_response(
+                msg='Cannot delete order with completed payment',
+                code=400
+            )
+
+        order_id = order.id
+        pay_code = order.pay_code
+        self.perform_destroy(order)
+
+        return success_response(
+            msg=f'Order #{order_id} (pay_code: {pay_code}) deleted successfully'
+        )
 
 
 

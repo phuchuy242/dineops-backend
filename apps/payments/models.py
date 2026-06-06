@@ -40,7 +40,7 @@ class BankAccount(models.Model):
     # QR template preference
     qr_template = models.CharField(
         max_length=20,
-        default='compact2',
+        default='qr_only',
         choices=[
             ('compact', 'Compact'),
             ('compact2', 'Compact 2'),

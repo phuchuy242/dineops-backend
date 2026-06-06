@@ -79,18 +79,18 @@ class PaymentSerializer(serializers.ModelSerializer):
 
 class CreatePaymentQRSerializer(serializers.Serializer):
     """Serializer for creating payment with QR code"""
-    order_id = serializers.IntegerField()
+    pay_code = serializers.CharField(max_length=50)
     payment_method = serializers.ChoiceField(
         choices=['bank_transfer', 'momo', 'vnpay'],
         default='bank_transfer'
     )
 
-    def validate_order_id(self, value):
-        """Validate order exists"""
+    def validate_pay_code(self, value):
+        """Validate order exists by pay_code"""
         try:
-            order = Order.objects.get(id=value)
+            order = Order.objects.get(pay_code=value)
         except Order.DoesNotExist:
-            raise serializers.ValidationError("Order not found")
+            raise serializers.ValidationError("Order not found with this pay_code")
 
         if hasattr(order, 'payment'):
             raise serializers.ValidationError("Payment already exists for this order")

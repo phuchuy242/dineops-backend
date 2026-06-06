@@ -7,10 +7,7 @@ from django.db.models import Q
 from .models import User
 
 
-# USER SERIALIZER (For output)
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for User model output."""
-
     class Meta:
         model = User
         fields = (

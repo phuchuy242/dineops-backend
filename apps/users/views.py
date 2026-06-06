@@ -56,15 +56,12 @@ class UserViewSet(viewsets.GenericViewSet):
             )
 
         try:
-            # Create user
             user = serializer.save()
 
-            # Generate tokens using SimpleJWT
             refresh = SimpleJWTRefreshToken.for_user(user)
             access_token = str(refresh.access_token)
             refresh_token_str = str(refresh)
 
-            # Store refresh token in database
             RefreshToken.objects.create(
                 jti=str(refresh['jti']),
                 user=user,
@@ -72,7 +69,6 @@ class UserViewSet(viewsets.GenericViewSet):
                 expires_at=timezone.now() + timezone.timedelta(days=7)
             )
 
-            # Serialize user data
             user_data = UserSerializer(user).data
 
             data = {

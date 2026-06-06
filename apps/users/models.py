@@ -12,7 +12,7 @@ class UserManager(BaseUserManager):
     def create_user(self, password=None, email=None, phone_number=None, user_name=None, **extra_fields):
         # 1. Kiểm tra phải có ít nhất 1 định danh
         if not email and not phone_number and not user_name:
-            raise ValueError("Phải cung cấp ít nhất Email, Số điện thoại hoặc Username")
+            raise ValueError("You must provide at least an email address, phone number, or username.")
 
         # 2. Normalize email nếu có
         if email:
@@ -36,7 +36,7 @@ class UserManager(BaseUserManager):
 
         # Supe ruser thường bắt buộc cần email hoặc username để quản lý
         if not email:
-            raise ValueError("Superuser phải có email")
+            raise ValueError("Superuser must have an email address.")
 
         return self.create_user(email=email, password=password, **extra_fields)
 
@@ -57,7 +57,6 @@ class User(AbstractBaseUser, PermissionsMixin):
     last_name = models.CharField(max_length=150, blank=True)
 
     avatar_url = models.URLField(blank=True)
-
     is_active = models.BooleanField(default=True)
     is_verified = models.BooleanField(default=False)
     is_staff = models.BooleanField(default=False)
@@ -71,10 +70,6 @@ class User(AbstractBaseUser, PermissionsMixin):
 
     objects = UserManager()
 
-    # USERNAME_FIELD là trường chính để Django nhận diện (thường dùng email hoặc user_name)
-    # Lưu ý: Trường này PHẢI unique và KHÔNG ĐƯỢC null trong logic Django cũ,
-    # nhưng với custom backend thì ta có thể lách luật.
-    # Tuy nhiên, an toàn nhất vẫn là chọn 'user_name' hoặc 'email' làm gốc.
     USERNAME_FIELD = "email"
 
     # Các trường bắt buộc khi chạy lệnh createsuperuser

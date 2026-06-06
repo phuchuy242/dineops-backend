@@ -101,7 +101,7 @@ class VietQRService:
         bank_code: str,
         amount: float,
         description: str,
-        template: str = "compact2"
+        template: str = "qr_only"
     ) -> Dict:
         """
         Generate VietQR code using direct image URL (simpler, no API call needed)
@@ -165,7 +165,7 @@ class VietQRService:
         bank_code: str,
         amount: float,
         description: str,
-        template: str = "compact2",
+        template: str = "qr_only",
         use_api: bool = False
     ) -> Dict:
         """
@@ -201,7 +201,7 @@ class VietQRService:
         bank_code: str,
         amount: float,
         description: str,
-        template: str = "compact2"
+        template: str = "qr_only"
     ) -> Dict:
         """
         Generate VietQR code using API endpoint

@@ -35,7 +35,7 @@ class ProductSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'category', 'category_name', 'name', 'description',
+        fields = ['id', 'category', 'category_name', 'name', 'description', 'image_url',
                   'is_active', 'created_at', 'updated_at', 'variants', 'variants_count']
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -49,7 +49,7 @@ class ProductListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Product
-        fields = ['id', 'category', 'category_name', 'name', 'description',
+        fields = ['id', 'category', 'category_name', 'name', 'description', 'image_url',
                   'is_active', 'created_at', 'updated_at']
         read_only_fields = ['id', 'created_at', 'updated_at']
 

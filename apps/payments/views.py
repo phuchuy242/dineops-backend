@@ -131,7 +131,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
         POST /api/v1/payments/create_with_qr/
         Body:
         {
-            "order_id": 1,
+            "pay_code": "ABC12345",
             "payment_method": "bank_transfer",
             "bank_account_id": 1  // Optional: specify bank account, otherwise use default
         }
@@ -139,12 +139,12 @@ class PaymentViewSet(viewsets.ModelViewSet):
         serializer = CreatePaymentQRSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
 
-        order_id = serializer.validated_data['order_id']
+        pay_code = serializer.validated_data['pay_code']
         payment_method = serializer.validated_data['payment_method']
         bank_account_id = request.data.get('bank_account_id')
 
         try:
-            order = Order.objects.get(id=order_id)
+            order = Order.objects.get(pay_code=pay_code)
 
             # Get bank account from database
             if bank_account_id:
@@ -168,7 +168,7 @@ class PaymentViewSet(viewsets.ModelViewSet):
                     account_no = bank_config.get('ACCOUNT_NO', '0796791500')
                     account_name = bank_config.get('ACCOUNT_NAME', 'TRAN NGOC PHUC HUY')
                     bank_code = bank_config.get('BANK_CODE', 'MB')
-                    qr_template = 'compact2'
+                    qr_template = 'qr_only'
                 else:
                     account_no = bank_account.account_number
                     account_name = bank_account.account_name
@@ -201,7 +201,6 @@ class PaymentViewSet(viewsets.ModelViewSet):
             payment = Payment.objects.create(
                 order=order,
                 payment_method=payment_method,
-
                 amount=order.total_amount,
                 qr_code_url=qr_result['qr_code_url'],
                 qr_data=qr_result['qr_data'],
@@ -211,6 +210,10 @@ class PaymentViewSet(viewsets.ModelViewSet):
                 transfer_content=transfer_content,
                 payment_status='pending'
             )
+
+            # Update order status to awaiting_payment
+            order.status = 'awaiting_payment'
+            order.save(update_fields=['status', 'updated_at'])
 
             response_data = PaymentSerializer(payment).data
             response_data['qr_info'] = qr_result['bank_info']
@@ -259,6 +262,66 @@ class PaymentViewSet(viewsets.ModelViewSet):
         except Order.DoesNotExist:
             return Response(
                 {'error': 'Order not found'},
+                status=status.HTTP_404_NOT_FOUND
+            )
+
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path='cancel-by-paycode')
+    def cancel_by_paycode(self, request):
+        """
+        Cancel payment and revert order status to pending
+
+        POST /api/v1/payments/cancel-by-paycode/
+        Body: {
+            "pay_code": "ABC12345"
+        }
+        """
+        pay_code = request.data.get('pay_code')
+
+        if not pay_code:
+            return Response(
+                {'error': 'pay_code is required'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+        try:
+            order = Order.objects.get(pay_code=pay_code)
+
+            # Check if payment exists
+            if not hasattr(order, 'payment'):
+                return Response(
+                    {'error': 'No payment found for this order'},
+                    status=status.HTTP_404_NOT_FOUND
+                )
+
+            payment = order.payment
+
+            # Only allow cancelling pending payments
+            if payment.payment_status == 'paid':
+                return Response(
+                    {'error': 'Cannot cancel a completed payment'},
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+
+            # Delete the payment record
+            payment.delete()
+
+            # Revert order status back to pending
+            order.status = 'pending'
+            order.save(update_fields=['status', 'updated_at'])
+
+            return Response({
+                'status': 'success',
+                'message': 'Payment cancelled successfully. Order reverted to pending status.',
+                'data': {
+                    'order_id': order.id,
+                    'pay_code': order.pay_code,
+                    'status': order.status
+                }
+            })
+
+        except Order.DoesNotExist:
+            return Response(
+                {'error': 'Order not found with this pay_code'},
                 status=status.HTTP_404_NOT_FOUND
             )
 
