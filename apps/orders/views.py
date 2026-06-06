@@ -1,58 +1,68 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from django.utils import timezone
 
 from .models import Order, OrderItem, OrderItemTopping
 from .serializers import (
     OrderSerializer, OrderListSerializer, OrderStatusUpdateSerializer,
-    OrderItemSerializer, OrderItemToppingSerializer
+    OrderItemSerializer, OrderItemToppingSerializer, OrderCreateSerializer, OrderHistorySerializer
 )
 from core.responses import success_response, error_response, created_response, StandardResultsSetPagination
 from core.mixins import FilterSortMixin, StandardResponseMixin
 
 
 class OrderViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    """ViewSet for Order CRUD operations"""
+    """ViewSet for Order CRUD operations - PUBLIC (Customers scan QR at table)"""
     queryset = Order.objects.all()
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['table__table_number', 'notes']
+
+    def get_permissions(self):
+        """
+        Allow public access for customers to view and create orders via QR code
+        Staff can manage orders with or without token
+        """
+        permission_classes = [AllowAny]
+        return [permission() for permission in permission_classes]
 
     def get_serializer_class(self):
         if self.action == 'list':
             return OrderListSerializer
+        if self.action == 'create':
+            return OrderCreateSerializer
         return OrderSerializer
 
     def get_queryset(self):
-        return Order.objects.select_related('table', 'user').prefetch_related('items')
+        queryset = Order.objects.select_related('table', 'user').prefetch_related('items')
+
+        # Filter by status
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        order = serializer.save(user=request.user)
-        return created_response(data=OrderSerializer(order).data, msg='Order created successfully')
+        
+        # Handle AnonymousUser
+        user = request.user if request.user.is_authenticated else None
+        
+        order = serializer.save(user=user)
 
-    @action(detail=False, methods=['get'])
-    def pending(self, request):
-        """Get all pending orders"""
-        orders = self.get_queryset().filter(status='pending')
-        serializer = OrderListSerializer(orders, many=True)
-        return success_response(data=serializer.data, msg='Pending orders retrieved successfully')
+        # Check if order was created or merged with existing
+        msg = 'Order created successfully'
+        if order.items.count() > 1:  # Simple heuristic: if multiple items, likely merged
+            # More accurate: check if order.updated_at is very close to now (within 1 second)
+            from django.utils import timezone
+            from datetime import timedelta
+            if (timezone.now() - order.updated_at) < timedelta(seconds=2):
+                msg = 'Items added to existing order successfully'
 
-    @action(detail=False, methods=['get'])
-    def confirmed(self, request):
-        """Get all confirmed orders"""
-        orders = self.get_queryset().filter(status='confirmed')
-        serializer = OrderListSerializer(orders, many=True)
-        return success_response(data=serializer.data, msg='Confirmed orders retrieved successfully')
+        return created_response(data=OrderSerializer(order).data, msg=msg)
 
-    @action(detail=False, methods=['get'])
-    def served(self, request):
-        """Get all served orders"""
-        orders = self.get_queryset().filter(status='served')
-        serializer = OrderListSerializer(orders, many=True)
-        return success_response(data=serializer.data, msg='Served orders retrieved successfully')
 
     @action(detail=False, methods=['get'])
     def active(self, request):
@@ -79,6 +89,23 @@ class OrderViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
         serializer = OrderListSerializer(orders, many=True)
         return success_response(data=serializer.data, msg='User orders retrieved successfully')
 
+    @action(detail=False, methods=['get'], url_path='by-paycode')
+    def by_paycode(self, request):
+        """Get order by pay_code with full order history (all items and toppings)"""
+        pay_code = request.query_params.get('pay_code')
+        if not pay_code:
+            return error_response(msg='pay_code parameter is required', code=400)
+
+        try:
+            order = self.get_queryset().get(pay_code=pay_code)
+            serializer = OrderHistorySerializer(order)
+            return success_response(
+                data=serializer.data,
+                msg='Order retrieved successfully with full history'
+            )
+        except Order.DoesNotExist:
+            return error_response(msg='Order not found with this pay_code', code=404)
+
     @action(detail=True, methods=['patch'], url_path='update-status')
     def update_status(self, request, pk=None):
         """Update order status"""
@@ -101,57 +128,32 @@ class OrderViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
         response_serializer = OrderSerializer(order)
         return success_response(data=response_serializer.data, msg='Order status updated successfully')
 
-    @action(detail=True, methods=['post'])
-    def confirm(self, request, pk=None):
-        """Confirm an order"""
+    def destroy(self, request, *args, **kwargs):
+        """Delete an order - only allowed for pending or cancelled orders"""
         order = self.get_object()
-        order.status = 'confirmed'
-        order.confirmed_at = timezone.now()
-        order.save()
 
-        serializer = OrderSerializer(order)
-        return success_response(data=serializer.data, msg='Order confirmed successfully')
+        # Only allow deletion of pending or cancelled orders
+        if order.status not in ['pending', 'cancelled']:
+            return error_response(
+                msg=f'Cannot delete order with status "{order.get_status_display()}". Only pending or cancelled orders can be deleted.',
+                code=400
+            )
 
-    @action(detail=True, methods=['post'])
-    def serve(self, request, pk=None):
-        """Mark order as served"""
-        order = self.get_object()
-        order.status = 'served'
-        order.served_at = timezone.now()
-        order.save()
+        # Check if order has associated payment
+        if hasattr(order, 'payment') and order.payment.payment_status == 'paid':
+            return error_response(
+                msg='Cannot delete order with completed payment',
+                code=400
+            )
 
-        serializer = OrderSerializer(order)
-        return success_response(data=serializer.data, msg='Order marked as served successfully')
+        order_id = order.id
+        pay_code = order.pay_code
+        self.perform_destroy(order)
 
-    @action(detail=True, methods=['post'])
-    def complete(self, request, pk=None):
-        """Complete an order"""
-        order = self.get_object()
-        order.status = 'completed'
-        order.completed_at = timezone.now()
-        order.save()
+        return success_response(
+            msg=f'Order #{order_id} (pay_code: {pay_code}) deleted successfully'
+        )
 
-        serializer = OrderSerializer(order)
-        return success_response(data=serializer.data, msg='Order completed successfully')
-
-    @action(detail=True, methods=['post'])
-    def cancel(self, request, pk=None):
-        """Cancel an order"""
-        order = self.get_object()
-        order.status = 'cancelled'
-        order.save()
-
-        serializer = OrderSerializer(order)
-        return success_response(data=serializer.data, msg='Order cancelled successfully')
-
-    @action(detail=True, methods=['get'])
-    def summary(self, request, pk=None):
-        """Get order summary"""
-        order = self.get_object()
-        order.calculate_total()  # Recalculate total
-
-        serializer = OrderSerializer(order)
-        return success_response(data=serializer.data, msg='Order summary retrieved successfully')
 
 
 class OrderItemViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):

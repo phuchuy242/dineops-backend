@@ -3,17 +3,11 @@ from django.contrib.auth import authenticate
 from django.core.cache import cache
 from django.utils import timezone
 from django.conf import settings
-from datetime import timedelta
 from django.db.models import Q
 from .models import User
 
 
-# ==========================================
-# USER SERIALIZER (For output)
-# ==========================================
 class UserSerializer(serializers.ModelSerializer):
-    """Serializer for User model output."""
-
     class Meta:
         model = User
         fields = (
@@ -35,9 +29,7 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = fields
 
 
-# ==========================================
 # REGISTER SERIALIZER
-# ==========================================
 class RegisterSerializer(serializers.Serializer):
     """
     Serializer for user registration.
@@ -89,11 +81,6 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError("This phone number is already in use.")
         return value or None
 
-    def validate_password(self, value):
-        """Validate password strength."""
-        if len(value) < 8:
-            raise serializers.ValidationError("Password must be at least 8 characters.")
-        return value
 
     def validate(self, attrs):
         """Cross-field validation."""
@@ -125,9 +112,6 @@ class RegisterSerializer(serializers.Serializer):
         return user
 
 
-# ==========================================
-# LOGIN SERIALIZER
-# ==========================================
 class LoginSerializer(serializers.Serializer):
     """
     Serializer for user login.
@@ -140,7 +124,6 @@ class LoginSerializer(serializers.Serializer):
     )
     email = serializers.EmailField(required=False, allow_blank=True)
     user_name = serializers.CharField(required=False, allow_blank=True)
-    username = serializers.CharField(required=False, allow_blank=True)
     phone_number = serializers.CharField(required=False, allow_blank=True)
     password = serializers.CharField(required=True, write_only=True)
 
@@ -151,7 +134,6 @@ class LoginSerializer(serializers.Serializer):
             attrs.get('identifier') or
             attrs.get('email') or
             attrs.get('user_name') or
-            attrs.get('username') or
             attrs.get('phone_number')
         )
         password = attrs.get('password')
@@ -229,23 +211,13 @@ class LoginSerializer(serializers.Serializer):
         ).first()
 
 
-# ==========================================
 # REFRESH TOKEN SERIALIZER
-# ==========================================
 class RefreshTokenSerializer(serializers.Serializer):
-    """Serializer for refreshing access token."""
     refresh_token = serializers.CharField(required=True)
 
-    def validate_refresh_token(self, value):
-        """Validate refresh token exists and is valid."""
-        if not value:
-            raise serializers.ValidationError("Refresh token is required.")
-        return value
 
 
-# ==========================================
 # PASSWORD CHANGE SERIALIZER
-# ==========================================
 class PasswordChangeSerializer(serializers.Serializer):
     """Serializer for changing password."""
     old_password = serializers.CharField(required=True, write_only=True)

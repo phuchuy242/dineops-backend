@@ -3,7 +3,6 @@ from datetime import datetime
 
 
 class TimestampField(serializers.DateTimeField):
-    """Custom datetime field that formats as 'YYYY-MM-DD HH:MM:SS'"""
 
     def to_representation(self, value):
         if not value:

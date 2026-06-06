@@ -4,7 +4,6 @@ from core.responses import success_response, error_response, created_response, d
 
 
 class FilterSortMixin:
-    """Mixin to add filtering and sorting capabilities to ViewSets"""
 
     search_fields = []  # Override in viewset
     date_filter_field = 'created_at'  # Override if different

@@ -30,15 +30,7 @@ class EmailOrUsernameOrPhoneBackend(ModelBackend):
             return None
 
     def get_user(self, user_id):
-        """
-        Get user by primary key.
 
-        Args:
-            user_id: User's primary key
-
-        Returns:
-            User object if found, None otherwise
-        """
         try:
             return User.objects.get(pk=user_id)
         except User.DoesNotExist:

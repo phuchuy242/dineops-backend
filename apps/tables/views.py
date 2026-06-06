@@ -1,6 +1,6 @@
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import IsAuthenticated, AllowAny
 
 from .models import Table
 from .serializers import TableSerializer, TableStatusUpdateSerializer
@@ -9,12 +9,32 @@ from core.mixins import FilterSortMixin, StandardResponseMixin
 
 
 class TableViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet):
-    """ViewSet for Table CRUD operations"""
+    """ViewSet for Table CRUD operations - Public Read, Authenticated Write"""
     queryset = Table.objects.all()
     serializer_class = TableSerializer
-    permission_classes = [IsAuthenticated]
     pagination_class = StandardResultsSetPagination
     search_fields = ['table_number', 'location']
+
+    def get_permissions(self):
+        """
+        Allow public read access (GET requests)
+        Require authentication for write operations (POST, PUT, PATCH, DELETE)
+        """
+        if self.action in ['list', 'retrieve', 'available']:
+            permission_classes = [AllowAny]
+        else:
+            permission_classes = [IsAuthenticated]
+        return [permission() for permission in permission_classes]
+
+    def get_queryset(self):
+        queryset = super().get_queryset()
+
+        # Filter by status
+        status = self.request.query_params.get('status')
+        if status:
+            queryset = queryset.filter(status=status)
+
+        return queryset
 
     @action(detail=False, methods=['get'])
     def available(self, request):
@@ -23,19 +43,6 @@ class TableViewSet(FilterSortMixin, StandardResponseMixin, viewsets.ModelViewSet
         serializer = TableSerializer(tables, many=True)
         return success_response(data=serializer.data, msg='Available tables retrieved successfully')
 
-    @action(detail=False, methods=['get'])
-    def occupied(self, request):
-        """Get all occupied tables"""
-        tables = Table.objects.filter(status='occupied')
-        serializer = TableSerializer(tables, many=True)
-        return success_response(data=serializer.data, msg='Occupied tables retrieved successfully')
-
-    @action(detail=False, methods=['get'])
-    def reserved(self, request):
-        """Get all reserved tables"""
-        tables = Table.objects.filter(status='reserved')
-        serializer = TableSerializer(tables, many=True)
-        return success_response(data=serializer.data, msg='Reserved tables retrieved successfully')
 
     @action(detail=True, methods=['patch'], url_path='update-status')
     def update_status(self, request, pk=None):

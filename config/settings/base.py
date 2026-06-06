@@ -75,6 +75,7 @@ INSTALLED_APPS = [
     'apps.payments',
     'apps.inventory',
     'apps.staff',
+    'apps.staff_calls',
     'apps.reports',
     'apps.ingredient',
     'apps.dishingredient',
@@ -233,6 +234,7 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
+    'ngrok-skip-browser-warning',  # thêm dòng này
 ]
 
 # CSRF Configuration
@@ -259,7 +261,7 @@ REST_FRAMEWORK = {
 # JWT Settings
 JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
 JWT_ALGORITHM = 'HS256'
-JWT_ACCESS_EXP_MINUTES = int(os.getenv('JWT_ACCESS_EXP_MINUTES', '15'))  # 15 minutes
+JWT_ACCESS_EXP_MINUTES = int(os.getenv('JWT_ACCESS_EXP_MINUTES', '120003'))  # 15 minutes
 JWT_REFRESH_EXP_DAYS = int(os.getenv('JWT_REFRESH_EXP_DAYS', '7'))  # 7 days
 
 # Login security settings
@@ -270,7 +272,7 @@ LOGIN_LOCKOUT_SECONDS = int(os.getenv('LOGIN_LOCKOUT_SECONDS', '300'))  # 5 minu
 from datetime import timedelta
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_EXP_MINUTES', '15'))),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=int(os.getenv('JWT_ACCESS_EXP_MINUTES', '150000'))),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=int(os.getenv('JWT_REFRESH_EXP_DAYS', '7'))),
     'ROTATE_REFRESH_TOKENS': False,
     'BLACKLIST_AFTER_ROTATION': False,
@@ -300,3 +302,19 @@ SIMPLE_JWT = {
     'SLIDING_TOKEN_LIFETIME': timedelta(minutes=15),
     'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=7),
 }
+
+# VietQR Bank Configuration
+VIETQR_BANK_CONFIG = {
+    'ACCOUNT_NO': os.getenv('VIETQR_ACCOUNT_NO', '0796791500'),
+    'ACCOUNT_NAME': os.getenv('VIETQR_ACCOUNT_NAME', 'CONG TY DINEOPS'),
+    'BANK_CODE': os.getenv('VIETQR_BANK_CODE', 'MB'),  # MB, VCB, TCB, VTB, etc.
+}
+
+ALLOWED_HOSTS = ['*']
+
+
+# Sepay Webhook Configuration
+SEPAY_WEBHOOK_SECRET = os.getenv('SEPAY_WEBHOOK_SECRET', '')
+SEPAY_VERIFY_SIGNATURE = _bool_env(os.getenv('SEPAY_VERIFY_SIGNATURE'), False)
+
+CORS_ALLOW_ALL_ORIGINS = True
